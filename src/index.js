@@ -199,10 +199,18 @@ export default class extends Component {
         //this.fingerYEnd = e.nativeEvent.locationY;
         if(this.internals.hasDragAction){
             this.internals.hasDragAction = 0;
+            const state = this.state;
+
+            let x = (state.total-2) * state.width;
             this.props.action.releaseCB();
+
+            
             setTimeout(()=>{
-                this.internals.isDrag = false;
-            },0)
+                this.refScrollView.scrollTo({ x,y:0, animated:true });
+                setTimeout(() => {
+                    this.internals.isDrag = false;
+                }, 100);
+            },0);
         }
     }
     updateIndex(offset, dir, cb) {

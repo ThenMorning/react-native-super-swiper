@@ -60,7 +60,6 @@ export default class MyApp extends Component {
     })
   }
   releaseCB(){
-    console.log(23)
     //把 dragCB 中更新的视图还原
     const newSwiperContent =this.state.swiperContent.slice(0,this.state.swiperContent.length-1)
     newSwiperContent.push(<View style={styles.querItem} key={this.state.swiperContent.length}>
@@ -69,7 +68,7 @@ export default class MyApp extends Component {
      this.setState({
       swiperContent:newSwiperContent
     })
-    alert("do something");
+   alert("do something");
   }
   render() {
     return (
