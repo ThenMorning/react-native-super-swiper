@@ -1,264 +1,341 @@
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
+
+
+import React from 'react';
 import {
+    Animated,
+    Dimensions,
+    Easing,
+    PanResponder,
+    ScrollView,
+    StyleSheet,
     Text,
     View,
-    ViewPropTypes,
-    ScrollView,
-    Dimensions,
-    TouchableOpacity,
-    Platform,
-    ActivityIndicator
+    ViewPropTypes
 } from 'react-native';
+import PropTypes from 'prop-types';
 
-export default class extends Component {
-    // 属性类型
+const WIDTH = Dimensions.get('window').width;
+const LOAD_MORE_WIDTH = 60;
+
+const GESTURE_RADIUS = 10; // 手势滑动的容差
+const ANIMATED_DURATION = 200; // 页面动画的时长
+const GESTURE_DAMP = 3; // 手势阻尼
+const SPEED_SENSITIVITY = 0.08; // 速度灵敏度
+
+const SELECTED_DOT_WIDTH = 10;
+const UNSELECTED_DOT_WIDTH = 5;
+const DETAL_DOT_WIDTH = SELECTED_DOT_WIDTH - UNSELECTED_DOT_WIDTH;
+const SELECTED_DOT_OPACITY = 0.8;
+const UNSELECTED_DOT_OPACITY = 0.6;
+const DETAL_DOT_OPACITY = SELECTED_DOT_OPACITY - UNSELECTED_DOT_OPACITY;
+
+/**
+ * 轮播组件
+ */
+export class ReactNativeSuperSwiper extends React.Component {
     static propTypes = {
-        horizontal: PropTypes.bool,//水平垂直
-        swiperContent: PropTypes.node.isRequired,// 滚动内容
-        scrollViewStyle: PropTypes.oneOfType([PropTypes.object, PropTypes.number]),//滚动区域的样式
-        contentContainerStyle: PropTypes.oneOfType([PropTypes.object, PropTypes.number]),//滚动内容盒子的样式
-        index: PropTypes.number, //当前元素
-        onIndexChanged: PropTypes.func, //当前元素变化的回调
-        action:PropTypes.object // dragActionWidth:触发激活事件的拖动距离 dragCB：激活事件  releaseCB：释放事件
-    }
-    // 默认属性
+        style: ViewPropTypes.style,
+        isAndroid:PropTypes.bool, // 是否为安卓设备
+        loadMoreOptions: PropTypes.object,// 加载更多 相关配置  enableLoadMore: PropTypes.bool, // 是否开启加载更多  onArrive: PropTypes.func, // 到达回调   onRelease: PropTypes.func, // 到达后释放回调 distance:PropTypes.number(可拖拽区域为 屏幕宽度/distance)  text:加载更多文案
+        onBeginDrag: PropTypes.func, // 滑动拖拽开始时触发
+        onEndDrag: PropTypes.func, // 滑动拖拽结束时触发
+        onChange:PropTypes.func, // 改变时触发
+        onScroll: PropTypes.func, // 滑动时触发
+    };
+
     static defaultProps = {
-        index: 0,
-        onIndexChanged: () => null,
-        pagingEnabled: true
-    }
-    refScrollView = null;
-    fingerXStart = 0;
-    fingerYStart = 0;
-    fingerXEnd = 0;
-    fingerYEnd = 0;
-    scrollX = 0;
-
-    initState = props => {
-        const { width, height } = Dimensions.get('window');
-        initState = {
-            index: 0, // 初始化当前元素为首个元素
-            offset: {}
-        };
-        initState.children = Array.isArray(props.swiperContent)
-            ? props.swiperContent.filter(child => child)
-            : props.swiperContent
-
-        initState.total = initState.children ? initState.children.length || 1 : 0;
-        if (props.width) {
-            initState.width = props.width
-        } else if (this.state && this.state.width) {
-            initState.width = this.state.width
-        } else {
-            initState.width = width
+        loadMoreOptions:{
+            enableLoadMore: false,
+            distance:GESTURE_DAMP
         }
+    };
 
-        if (props.height) {
-            initState.height = props.height
-        } else if (this.state && this.state.height) {
-            initState.height = this.state.height
-        } else {
-            initState.height = height
-        }
-        initState.dir = props.horizontal === false ? 'y' : 'x'; // 方向默认为水平
-        initState.offset[initState.dir] =
-            initState.dir === 'y' ? height * props.index : width * props.index
-        this.internals = {
-            isScrolling: false
-        }
-        return initState
-    }
+    constructor(props) {
+        super(props);
+        this.state = {};
 
-    state = this.initState(this.props)
+        this.translateX = new Animated.Value(0); // 可视区域的实时偏移量
+        this.moreViewWidth = new Animated.Value(0); // 加载更多区域的宽度
+        this.moreArrowRotateZ = new Animated.Value(0);
+        this.contentWidth = 0; // 内容区域的宽度
+        this.tmpTranslateX = 0; // 响应手势时间时的瞬间偏移量
+        this.currentIndex = 0; // 当前页面索引号
+        this.pageWidth = 0; // 每页宽度
+        this.pageCount = 0; // 总页数
+        this.canLoadMore = false; // 是否允许执行LoadMore
+        this.onScrollListener = []; // onScroll监听器对象
 
-    fullState() {
-        // 返回state与internals 
-        return Object.assign({}, this.state, this.internals)
-    }
+        this.viewPanResponder = PanResponder.create({
+            onMoveShouldSetPanResponder: this.onMoveShouldSetPanResponder,
+            onPanResponderGrant: this.onPanResponderGrant,
+            onPanResponderMove: this.onPanResponderMove,
+            onPanResponderRelease: this.onPanResponderEnd,
+            onPanResponderTerminate: this.onPanResponderEnd
+        });
 
-    componentWillUpdate(nextProps, nextState) {
-        // If the index has changed, we notify the parent via the onIndexChanged callback
-        // if (this.state.index !== nextState.index)
-        //   this.props.onIndexChanged(nextState.index)
+        this.translateX.addListener(({ value = 0 }) => {
+            const scroll = Math.abs(-value);
+            // 回调参数：
+            const result = {
+                scroll, // 总偏移量，
+                position: Math.floor(scroll / this.pageWidth), // 从左数起第一个当前可见的页面的下标;
+                offset: (scroll % this.pageWidth) / this.pageWidth, // 一个在[0,1]之内的范围(可以等于0或1)
+                isOverScroll: scroll > this.contentWidth // 是否是在弹性滑动
+            };
+
+            this.props.onScroll && this.props.onScroll(result);
+            for (let i = 0; i < this.onScrollListener.length; i++) {
+                this.onScrollListener[i](result);
+            }
+        });
     }
 
     render() {
-        const { swiperContent } = this.props;
+        const {isAndroid,loadMoreOptions} = this.props;
+        const {enableLoadMore,onArrive,onRelease} = loadMoreOptions;
+        // 实时页面内容数量
+        let pageCount = 0;
+        if (!this.props.children) {
+            pageCount = 0;
+        } else {
+            pageCount = React.Children.count(this.props.children);
+        }
+
+        if (this.pageCount !== pageCount) {
+            this.pageCount = pageCount;
+        }
+
+        if (isAndroid) {
+            return (
+                <ScrollView
+                    {...this.props}
+                    showsHorizontalScrollIndicator={false}
+                    overScrollMode="never"
+                    horizontal
+                    scrollEventThrottle={16}
+                    onLayout={(e) => {
+                        this.initData(e.nativeEvent.layout.width, pageCount);
+                        this.props.onLayout && this.props.onLayout(e);
+                    }}
+                    onScroll={(e) => {
+                        const { x } = e.nativeEvent.contentOffset;
+                        this.canLoadMore = x >= this.contentWidth + LOAD_MORE_WIDTH;
+                        if (enableLoadMore && this.canLoadMore) {
+                            onArrive && onArrive();
+                        }
+                        this.rotateArrow(!this.canLoadMore);
+                        this.translateX.setValue(x);
+                    }}
+                    onScrollBeginDrag={() => {
+                        this.props.onBeginDrag && this.props.onBeginDrag();
+                    }}
+                    onScrollEndDrag={() => {
+                        this.props.onEndDrag && this.props.onEndDrag();
+                        if (enableLoadMore && this.canLoadMore) {
+                            onRelease && onRelease();
+                        }
+                    }}
+                >
+                    {this.props.children}
+                </ScrollView>
+            );
+        }
+
         return (
-            <View style={styles.container} onLayout={this.onLayout.bind(this)}>
-                {this.renderScrollView(swiperContent)}
+            <View
+                {...this.props}
+                {...this.viewPanResponder.panHandlers}
+                onLayout={(e) => {
+                    this.initData(e.nativeEvent.layout.width, pageCount);
+                    this.props.onLayout && this.props.onLayout(e);
+                }}
+            >
+                <Animated.View
+                    style={[
+                        styles.root,
+                        this.props.style,
+                        {
+                            transform: [
+                                {
+                                    translateX: this.translateX
+                                }
+                            ]
+                        }
+                    ]}
+                >
+                    {this.props.children}
+                </Animated.View>
             </View>
-        )
+        );
     }
 
-    onLayout(e) {
-        console.log(e)
-        const { width, height } = e.nativeEvent.layout
-        const offset = (this.internals.offset = {})
-        let setup = this.state.index;
-        offset[this.state.dir] =
-            this.state.dir === 'y' ? height * setup : width * setup
-    }
 
-    scrollViewPropOverrides = () => {
-        const props = this.props
-        let overrides = {}
-        for (let prop in props) {
-            if (
-                typeof props[prop] === 'function' &&
-                prop !== 'onMomentumScrollEnd' &&
-                prop !== 'renderPagination' &&
-                prop !== 'onScrollBeginDrag'
-            ) {
-                let originResponder = props[prop]
-                overrides[prop] = e => originResponder(e, this.fullState(), this)
+    initData = (pageWidth = 0, pageCount = 0) => {
+        const {loadMoreOptions} = this.props;
+        const {enableLoadMore,distantce} = loadMoreOptions;
+
+        if (pageWidth > 0 && pageCount > 0) {
+            this.pageWidth = pageWidth;
+            // 设置more区域的最大宽度
+            if (enableLoadMore) {
+                this.moreViewWidth.setValue(pageWidth / distantce);
+            } else {
+                this.moreViewWidth.setValue(0);
+            }
+            this.contentWidth = pageWidth * (pageCount - 1);
+        }
+    };
+
+    onMoveShouldSetPanResponder = (e, gestureState) => {
+        const { dx, dy } = gestureState;
+        return Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > GESTURE_RADIUS;
+    };
+
+    onPanResponderGrant = () => {
+        this.tmpTranslateX = this.translateX.__getValue();
+        this.props.onBeginDrag && this.props.onBeginDrag();
+    };
+
+    onPanResponderMove = (e, gestureState) => {
+        const {loadMoreOptions,onChange} = this.props;
+        const {enableLoadMore,onArrive,distance} = loadMoreOptions;
+        const { dx } = gestureState;
+        let newX = this.tmpTranslateX + dx;
+        if (newX > 0) {
+            // 向左滑动
+            newX = 0;
+        } else if (newX < -this.contentWidth) {
+            // 向右滑动
+            if (enableLoadMore) {
+                const more = (this.contentWidth + newX) / distance;
+                newX = -this.contentWidth + more;
+
+                this.canLoadMore = !(more > -LOAD_MORE_WIDTH);
+                this.rotateArrow(more > -LOAD_MORE_WIDTH);
+            } else {
+                newX = -this.contentWidth;
             }
         }
-
-        return overrides
-    }
-
-    renderScrollView = swiperContent => {
-        return (
-            <ScrollView
-                ref={ref => this.refScrollView = ref}
-                {...this.props}
-                {...this.scrollViewPropOverrides()}
-                contentContainerStyle={[this.props.contentContainerStyle]}
-                contentOffset={this.state.offset}
-                onScrollBeginDrag={this.onScrollBeginDrag.bind(this)}
-                //onMomentumScrollBegin={this.onMomentumScrollBegin}
-                onMomentumScrollEnd={this.onMomentumScrollEnd.bind(this)}
-                //onScrollEndDrag={this.onScrollEndDrag}
-                onScroll={this.onScroll.bind(this)}
-                //onTouchStart={this.onTouchStart.bind(this)}
-                //onTouchMove={this.onTouchMove.bind(this)}
-                onTouchEnd={this.onTouchEnd.bind(this)}
-                scrollEventThrottle={5}
-                bounces={false}
-                style={this.props.scrollViewStyle}
-            >
-                {swiperContent}
-            </ScrollView>
-        )
-    }
-
-    //一个子view滑动开始拖动开始时触发
-    onScrollBeginDrag(e) {
-        this.internals.isScrolling = true;
-        this.props.onScrollBeginDrag &&
-            this.props.onScrollBeginDrag(e, this.fullState(), this)
-        //console.log(arguments)
-    }
-    //在滚动过程中, 每帧最多调用一次此函数, 调用的频率可以用scrollEventThrottle属性来控制
-    onScroll(e) {
-        //console.log(e.nativeEvent.contentOffset.x);//水平滚动距离
-        console.log('onMomentumScrollEnd',e.nativeEvent)
-        //console.log(this.state.index)
-        if(!this.internals.isDrag && this.state.index == (this.state.total-2) && e.nativeEvent.contentOffset.x >=((this.state.total-2) * this.state.width + this.props.action.dragActionWidth)){
-            this.internals.isDrag = true;
-            console.warn('dragCB',this.state.index,e.nativeEvent.contentOffset.x);
-            this.props.action.dragCB();
-            this.internals.hasDragAction = 1;
-            
+        this.translateX.setValue(newX);
+        const newCurrentIndex = this.computeIndex(newX);
+        if(newCurrentIndex !== this.currentIndex){
+            this.currentIndex = newCurrentIndex;
+            onChange && onChange(newCurrentIndex);
         }
-    }
-    //当一帧滚动开始时调用
-    onMomentumScrollBegin() { }
-    //当一帧滚动完毕时调用
-    onMomentumScrollEnd(e) {
-        // console.log('onMomentumScrollEnd', e.nativeEvent);
-        this.internals.isScrolling = false;
-        this.updateIndex(e.nativeEvent.contentOffset, this.state.dir, () => {
+        if (enableLoadMore && this.canLoadMore) {
+            onArrive && onArrive();
+        }
+    };
 
-            // if `onMomentumScrollEnd` registered will be called here
-            this.props.onMomentumScrollEnd &&
-                this.props.onMomentumScrollEnd(e, this.fullState(), this)
+    onPanResponderEnd = (e, gestureState) => {
+        const {loadMoreOptions} = this.props;;
+        const {enableLoadMore,onRelease} = loadMoreOptions;
+
+        const { vx } = gestureState;
+
+        const x = -this.translateX.__getValue();
+
+        this.props.onEndDrag && this.props.onEndDrag();
+        if (enableLoadMore && this.canLoadMore) {
+            onRelease && onRelease();
+        }
+
+        
+
+        // 如果松手时速度很快
+        if (vx < -SPEED_SENSITIVITY) {
+            this.toPage(this.currentIndex + 1);
+        } else if (vx > SPEED_SENSITIVITY) {
+            this.toPage(this.currentIndex);
+        } else if (x % this.pageWidth >= this.pageWidth / 2) {
+            this.toPage(this.currentIndex + 1);
+        } else {
+            this.toPage(this.currentIndex);
+        }
+    };
+
+    computeIndex = (x) => Math.floor(-x / this.pageWidth);
+
+    toPage = (index) => {
+        const {onChange} = this.props;
+        // 限制页面滚动的范围
+        // eslint-disable-next-line no-param-reassign
+        index = Math.min(Math.max(0, index), this.pageCount - 1);
+
+        Animated.timing(this.translateX, {
+            toValue: -index * this.pageWidth,
+            duration: ANIMATED_DURATION,
+            easing: Easing.linear
         })
-    }
-    //一个子view滚动结束拖拽时触发
-    onScrollEndDrag(e) {
-        //console.log('onScrollEndDrag', e.nativeEvent)
-    }
-    onTouchStart(e) {
-        //console.log('onTouchStart',e.nativeEvent);//水平滚动距离
-       // this.fingerXStart = e.nativeEvent.locationX;
-       // this.fingerYStart = e.nativeEvent.locationY;
-    }
-    onTouchMove(e) {
-        // console.log('onTouchMove', e.nativeEvent);//水平滚动距离
-        //this.refScrollView.scrollTo({x:e.nativeEvent.locationX, y: 0, animated: false })
-        // this.setState({
-        //     offset:e.nativeEvent.locationX-this.fingerXStart
-        // })
-    }
-    onTouchEnd(e) {
-        //console.log('onTouchEnd', e.nativeEvent);//水平滚动距离
-        //this.fingerXEnd = e.nativeEvent.locationX;
-        //this.fingerYEnd = e.nativeEvent.locationY;
-        if(this.internals.hasDragAction){
-            this.internals.hasDragAction = 0;
-            const state = this.state;
+                .start(() => {
+                    if(this.currentIndex !== index){
+                        onChange && onChange(index);
+                    }
+                    this.currentIndex = index;
+                    this.rotateArrow();
+                });
+    };
 
-            let x = (state.total-2) * state.width;
-            this.props.action.releaseCB();
-
-            
-            setTimeout(()=>{
-                this.refScrollView.scrollTo({ x,y:0, animated:true });
-                setTimeout(() => {
-                    this.internals.isDrag = false;
-                }, 100);
-            },0);
-        }
-    }
-    updateIndex(offset, dir, cb) {
-        const state = this.state;
-        let index = state.index
-        if (!this.internals.offset) {
-            this.internals.offset = {}
-        }
-        const diff = offset[dir] - this.internals.offset[dir];
-        if (!diff) return
-        const step = dir === 'x' ? state.width : state.height;
-        index = diff>0?parseInt(index + Math.round(diff / step)):parseInt(index - Math.round(Math.abs(diff) / step));
-        this.internals.offset = offset
-        this.setState({
-            index
+    rotateArrow = (left = true) => {
+        Animated.timing(this.moreArrowRotateZ, {
+            toValue: left ? 0 : 180,
+            duration: 50,
+            easing: Easing.linear
         })
-    }
-
-    scrollTo = (index, animated = true,cb) => {
-        if (
-          this.internals.isScrolling ||
-          this.state.total < 2 ||
-          index == this.state.index
-        )
-          return
-    
-        const state = this.state
-        const diff = this.state.index + (index - this.state.index)
-    
-        let x = 0
-        let y = 0
-        if (state.dir === 'x') x = diff * state.width
-        if (state.dir === 'y') y = diff * state.height
-    
-        this.scrollView && this.scrollView.scrollTo({ x, y, animated })
-    
-        // update scroll state
-        this.internals.isScrolling = true
-        cb && cb()
-      }
+                .start(() => {
+                    if (left) {
+                        this.canLoadMore = false;
+                    }
+                });
+    };
 
 }
-const styles = {
-    container: {
-        backgroundColor: 'transparent',
-        position: 'relative',
-        flex: 1
+
+
+
+const checkRef = (ref) => ref !== null && ref !== undefined && !this.isAddListener;
+
+const styles = StyleSheet.create({
+    dot: {
+        borderRadius: 1.5,
+        height: 3
     },
-}
-
-
+    icon: {
+        height: 16,
+        width: 16
+    },
+    indicator: {
+        alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center'
+    },
+    more_content: {
+        alignItems: 'center',
+        height: '100%',
+        justifyContent: 'center',
+        width: LOAD_MORE_WIDTH
+    },
+    more_text: {
+        // color: Color.textBlack,
+        fontSize: 12,
+        includeFontPadding: false,
+        marginTop: 8,
+        maxWidth: 52,
+        textAlign: 'center'
+    },
+    more_view: {
+        backgroundColor: 'white',
+        height: '100%'
+    },
+    root: {
+        alignItems: 'center',
+        flexDirection: 'row',
+        width: WIDTH
+    },
+    text: {
+        // color: Color.white,
+        fontSize: 13,
+        includeFontPadding: false,
+        textAlignVertical: 'center'
+    }
+});

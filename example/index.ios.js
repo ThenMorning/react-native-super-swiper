@@ -14,7 +14,7 @@ import {
   Dimensions
 } from 'react-native';
 
-import ReactNativeSuperSwiper from 'react-native-super-swiper';
+import {ReactNativeSuperSwiper} from 'react-native-super-swiper';
 const { width, height } = Dimensions.get('window');
 
 export default class MyApp extends Component {
@@ -39,10 +39,6 @@ export default class MyApp extends Component {
         </View>
       )
     })
-    list.push(
-    <View style={styles.querItem} key={list.length}>
-      <Text>左滑查看更多</Text>
-    </View>)
     return list;
   }
   componentWillMount() {
@@ -50,30 +46,33 @@ export default class MyApp extends Component {
       swiperContent:this.generateSwiperContent()
     })
   }
-  dragCB(){
-    const newSwiperContent =this.state.swiperContent.slice(0,this.state.swiperContent.length-1)
-    newSwiperContent.push(<View style={styles.querItem} key={this.state.swiperContent.length}>
-      <Text>释放查看更多</Text>
-    </View>)
-    this.setState({
-      swiperContent:newSwiperContent
-    })
+  onBeginDrag(){
+    console.log("start")
   }
-  releaseCB(){
-    //把 dragCB 中更新的视图还原
-    const newSwiperContent =this.state.swiperContent.slice(0,this.state.swiperContent.length-1)
-    newSwiperContent.push(<View style={styles.querItem} key={this.state.swiperContent.length}>
-      <Text>左滑查看更多</Text>
-    </View>)
-     this.setState({
-      swiperContent:newSwiperContent
-    })
-   alert("do something");
+  onEndDrag(){
+    console.log("end")
   }
+  onScroll(e){
+    // console.log(e)
+  }
+  onChange(index){
+    console.log(index)
+  }
+  
   render() {
     return (
       <View style={styles.container}>
-        <ReactNativeSuperSwiper ref={ref=>this.superSwiper = ref} swiperContent={this.state.swiperContent} action={{dragActionWidth:width/4 + 10,dragCB:this.dragCB.bind(this),releaseCB:this.releaseCB.bind(this)}}    horizontal={true}></ReactNativeSuperSwiper>
+        <ReactNativeSuperSwiper 
+        onChange={this.onChange}
+        loadMoreOptions={{
+          enableLoadMore:true,
+          distance:2,
+          onArrive:()=>{console.log("到达")},
+          onRelease:()=>{console.log("释放")},
+          renderLoadMoreView:()=>{}
+        }} onScroll={this.onScroll} onBeginDrag={this.onBeginDrag} onEndDrag={this.onEndDrag}>
+          {this.state.swiperContent}
+        </ReactNativeSuperSwiper>
       </View>
     );
   }
