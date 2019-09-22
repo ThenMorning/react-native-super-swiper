@@ -11,14 +11,16 @@ import {
   Text,
   View,
   Image,
-  Dimensions
+  Dimensions,
+  ScrollView,
+  TouchableHighlight
 } from 'react-native';
 
-import {ReactNativeSuperSwiper} from 'react-native-super-swiper';
+import { ReactNativeSuperSwiper } from 'react-native-super-swiper';
 const { width, height } = Dimensions.get('window');
 
 export default class MyApp extends Component {
-  
+
   generateSwiperContent() {
     const list = [];
     const img1 = require("./imgs/1.jpg");
@@ -32,60 +34,59 @@ export default class MyApp extends Component {
       img3,
       img4
     ]
-   images.map((img, index) => {
+    images.map((img, index) => {
       list.push(
-        <View style={styles.item} key={index}>
-          <Image style={styles.sliderImg} resizeMode={'stretch'} source={img} />
-        </View>
+        <TouchableHighlight style={styles.item} key={index} onPress={this.onPress.bind(this,index)}>
+        <Image style={styles.sliderImg} resizeMode={'stretch'} source={img} />
+      </TouchableHighlight>
       )
     })
     return list;
   }
   componentWillMount() {
     this.setState({
-      swiperContent:this.generateSwiperContent()
+      swiperContent: this.generateSwiperContent()
     })
   }
-  onBeginDrag(){
-    console.log("start")
+  onPress(index) {
+    console.log("onPress:当前点击第"+index+"个")
   }
-  onEndDrag(){
-    console.log("end")
+  onBeginDrag() {
+    console.log("onBeginDrag:触摸开始")
   }
-  onScroll(e){
+  onEndDrag() {
+    console.log("onEndDrag:触摸结束")
+  }
+  onScroll(e) {
     // console.log(e)
   }
-  onChange(index){
-    console.log(index)
+  onChange(index) {
+    console.log("onchange:当前是第"+index+"个")
   }
-  
+
   render() {
     return (
-      <View style={styles.container}>
-        <ReactNativeSuperSwiper 
-        isAndroid={true}
-        onChange={this.onChange}
-        loadMoreOptions={{
-          enableLoadMore:true,
-          distance:2,
-          onArrive:()=>{console.log("到达")},
-          onRelease:()=>{console.log("释放")},
-          renderLoadMoreView:()=>{}
-        }} onScroll={this.onScroll} onBeginDrag={this.onBeginDrag} onEndDrag={this.onEndDrag}>
+      <ScrollView>
+        <ReactNativeSuperSwiper
+          isAndroid={true}
+          onChange={this.onChange}
+          loadMoreOptions={{
+            enableLoadMore: true,
+            distance: 3,
+            initText: "左滑",
+            releaseText: "释放",
+            onArrive: () => { console.log("到达") },
+            onRelease: () => { console.log("释放") },
+            renderLoadMoreView: () => { }
+          }} onScroll={this.onScroll} onBeginDrag={this.onBeginDrag} onEndDrag={this.onEndDrag}>
           {this.state.swiperContent}
         </ReactNativeSuperSwiper>
-      </View>
+      </ScrollView>
     );
   }
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5FCFF',
-  },
   welcome: {
     fontSize: 20,
     textAlign: 'center',
@@ -100,12 +101,9 @@ const styles = StyleSheet.create({
     width: width,
     height: width / 1.5,
   },
-  querItem:{
-    width: width/4 + 20,
-    height: width / 1.5,
-  },
-  sliderImg: {
-    width: "100%",
+  sliderImg:{
+    width:"100%",
+    height:"100%"
   }
 });
 

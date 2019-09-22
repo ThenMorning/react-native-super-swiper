@@ -13,6 +13,7 @@ import {
     ViewPropTypes
 } from 'react-native';
 import PropTypes from 'prop-types';
+const iconOpenArrow = { uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACoAAAAeCAYAAABaKIzgAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACzSURBVFhH7ZjLCcMwEESVMnJOBW4ofeSWMiShHtJHWnANqWGzA2sdgnNJtEYL82Cw9cF+SBgtTr/QWltqrU8k53y27rmAZCnlpRFEZa82NA+fkrifbkX3JNFnw3NAyVFQchSUHAUlRxFVUvRYfOj17pSbPv9ir++IyAl1w9f5qIC00SUPymp+HZPcm4uscUTDbD0I8TFtUNYLynpBWS8o60V4WT3e+EvnbyCLqgs5ZkVTegPWo/lpSMbkegAAAABJRU5ErkJggg==' };
 
 const WIDTH = Dimensions.get('window').width;
 const LOAD_MORE_WIDTH = 60;
@@ -49,6 +50,10 @@ export class ReactNativeSuperSwiper extends React.Component {
             distance:GESTURE_DAMP
         }
     };
+    
+    state = {
+        canLoadMore:false
+    }
 
     constructor(props) {
         super(props);
@@ -56,14 +61,14 @@ export class ReactNativeSuperSwiper extends React.Component {
 
         this.translateX = new Animated.Value(0); // 可视区域的实时偏移量
         this.moreViewWidth = new Animated.Value(0); // 加载更多区域的宽度
+        this.moreViewText = new Animated.Value(0);
         this.moreArrowRotateZ = new Animated.Value(0);
         this.contentWidth = 0; // 内容区域的宽度
         this.tmpTranslateX = 0; // 响应手势时间时的瞬间偏移量
         this.currentIndex = 0; // 当前页面索引号
         this.pageWidth = 0; // 每页宽度
         this.pageCount = 0; // 总页数
-        this.canLoadMore = false; // 是否允许执行LoadMore
-        this.onScrollListener = []; // onScroll监听器对象
+
 
         this.viewPanResponder = PanResponder.create({
             onMoveShouldSetPanResponder: this.onMoveShouldSetPanResponder,
@@ -84,15 +89,12 @@ export class ReactNativeSuperSwiper extends React.Component {
             };
 
             this.props.onScroll && this.props.onScroll(result);
-            for (let i = 0; i < this.onScrollListener.length; i++) {
-                this.onScrollListener[i](result);
-            }
         });
     }
 
     render() {
-        const {isAndroid,loadMoreOptions} = this.props;
-        const {enableLoadMore,onArrive,onRelease} = loadMoreOptions;
+        const {isAndroid,loadMoreOptions,onChange} = this.props;
+        const {enableLoadMore,onArrive,onRelease,renderMoreView} = loadMoreOptions;
         // 实时页面内容数量
         let pageCount = 0;
         if (!this.props.children) {
@@ -112,6 +114,7 @@ export class ReactNativeSuperSwiper extends React.Component {
                     showsHorizontalScrollIndicator={false}
                     overScrollMode="never"
                     horizontal
+                    pagingEnabled={true}
                     scrollEventThrottle={16}
                     onLayout={(e) => {
                         this.initData(e.nativeEvent.layout.width, pageCount);
@@ -119,24 +122,35 @@ export class ReactNativeSuperSwiper extends React.Component {
                     }}
                     onScroll={(e) => {
                         const { x } = e.nativeEvent.contentOffset;
-                        this.canLoadMore = x >= this.contentWidth + LOAD_MORE_WIDTH;
-                        if (enableLoadMore && this.canLoadMore) {
+                        const _canLoadMore = x >= this.contentWidth + LOAD_MORE_WIDTH;
+                        if(_canLoadMore != this.state.canLoadMore){
+                            this.setState({
+                                canLoadMore:_canLoadMore
+                            })
+                        }
+                        if (enableLoadMore && _canLoadMore) {
                             onArrive && onArrive();
                         }
-                        this.rotateArrow(!this.canLoadMore);
+                        this.rotateArrow(!_canLoadMore);
                         this.translateX.setValue(x);
+                        const newCurrentIndex = -this.computeIndex(x);
+                        if(newCurrentIndex !== this.currentIndex){
+                            this.currentIndex = newCurrentIndex;
+                            onChange && onChange(newCurrentIndex);
+                        }
                     }}
                     onScrollBeginDrag={() => {
                         this.props.onBeginDrag && this.props.onBeginDrag();
                     }}
                     onScrollEndDrag={() => {
                         this.props.onEndDrag && this.props.onEndDrag();
-                        if (enableLoadMore && this.canLoadMore) {
+                        if (enableLoadMore && this.state.canLoadMore) {
                             onRelease && onRelease();
                         }
                     }}
                 >
                     {this.props.children}
+                    {renderMoreView && renderMoreView() || this.renderMoreView()}
                 </ScrollView>
             );
         }
@@ -164,10 +178,51 @@ export class ReactNativeSuperSwiper extends React.Component {
                     ]}
                 >
                     {this.props.children}
+                    {renderMoreView && renderMoreView() || this.renderMoreView()}
                 </Animated.View>
             </View>
         );
     }
+    
+    renderMoreView = () => {
+        const {loadMoreOptions,isAndroid} = this.props;
+        const {enableLoadMore, initText,releaseText} = loadMoreOptions;
+        if (!enableLoadMore) {
+            return null;
+        }
+        return (
+            <Animated.View
+                style={[
+                    styles.more_view,
+                    {
+                        width: isAndroid ? LOAD_MORE_WIDTH + 10 : this.moreViewWidth,
+                    }
+                ]}
+            >
+                <View style={styles.more_content}>
+                    <Animated.Image
+                        style={[
+                            styles.icon,
+                            {
+                                transform: [
+                                    {
+                                        rotateZ: this.moreArrowRotateZ.interpolate({
+                                            inputRange: [0, 180],
+                                            outputRange: ['0deg', '180deg'],
+                                            extrapolate: 'clamp'
+                                        })
+                                    }
+                                ]
+                            }
+                        ]}
+                        source={iconOpenArrow}
+                        resizeMode="stretch"
+                    />
+                    <Text style={styles.more_text} >{this.state.canLoadMore?releaseText:initText}</Text>
+                </View>
+            </Animated.View>
+        );
+    };
 
 
     initData = (pageWidth = 0, pageCount = 0) => {
@@ -176,6 +231,7 @@ export class ReactNativeSuperSwiper extends React.Component {
 
         if (pageWidth > 0 && pageCount > 0) {
             this.pageWidth = pageWidth;
+            console.log(pageWidth)
             // 设置more区域的最大宽度
             if (enableLoadMore) {
                 this.moreViewWidth.setValue(pageWidth / distantce);
@@ -209,8 +265,9 @@ export class ReactNativeSuperSwiper extends React.Component {
             if (enableLoadMore) {
                 const more = (this.contentWidth + newX) / distance;
                 newX = -this.contentWidth + more;
-
-                this.canLoadMore = !(more > -LOAD_MORE_WIDTH);
+                this.setState({
+                    canLoadMore:!(more > -LOAD_MORE_WIDTH)
+                })
                 this.rotateArrow(more > -LOAD_MORE_WIDTH);
             } else {
                 newX = -this.contentWidth;
@@ -222,7 +279,7 @@ export class ReactNativeSuperSwiper extends React.Component {
             this.currentIndex = newCurrentIndex;
             onChange && onChange(newCurrentIndex);
         }
-        if (enableLoadMore && this.canLoadMore) {
+        if (enableLoadMore && this.state.canLoadMore) {
             onArrive && onArrive();
         }
     };
@@ -236,7 +293,7 @@ export class ReactNativeSuperSwiper extends React.Component {
         const x = -this.translateX.__getValue();
 
         this.props.onEndDrag && this.props.onEndDrag();
-        if (enableLoadMore && this.canLoadMore) {
+        if (enableLoadMore && this.state.canLoadMore) {
             onRelease && onRelease();
         }
 
@@ -283,17 +340,21 @@ export class ReactNativeSuperSwiper extends React.Component {
             easing: Easing.linear
         })
                 .start(() => {
-                    if (left) {
-                        this.canLoadMore = false;
-                    }
+                    // if (left) {
+                    //     // this.canLoadMore = false;
+                    //     this.setState({
+                    //         canLoadMore:false
+                    //     })
+                    // }
                 });
+                
     };
+    
 
 }
 
 
 
-const checkRef = (ref) => ref !== null && ref !== undefined && !this.isAddListener;
 
 const styles = StyleSheet.create({
     dot: {
@@ -311,12 +372,11 @@ const styles = StyleSheet.create({
     },
     more_content: {
         alignItems: 'center',
-        height: '100%',
+        height: WIDTH/1.5,        
         justifyContent: 'center',
         width: LOAD_MORE_WIDTH
     },
     more_text: {
-        // color: Color.textBlack,
         fontSize: 12,
         includeFontPadding: false,
         marginTop: 8,
@@ -325,7 +385,7 @@ const styles = StyleSheet.create({
     },
     more_view: {
         backgroundColor: 'white',
-        height: '100%'
+        height:"100%"
     },
     root: {
         alignItems: 'center',
@@ -333,7 +393,6 @@ const styles = StyleSheet.create({
         width: WIDTH
     },
     text: {
-        // color: Color.white,
         fontSize: 13,
         includeFontPadding: false,
         textAlignVertical: 'center'
