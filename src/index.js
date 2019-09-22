@@ -64,6 +64,7 @@ export class ReactNativeSuperSwiper extends React.Component {
         this.moreViewText = new Animated.Value(0);
         this.moreArrowRotateZ = new Animated.Value(0);
         this.contentWidth = 0; // 内容区域的宽度
+        this.arrived = false; // 是否已经到达loadmore 区域
         this.tmpTranslateX = 0; // 响应手势时间时的瞬间偏移量
         this.currentIndex = 0; // 当前页面索引号
         this.pageWidth = 0; // 每页宽度
@@ -128,8 +129,9 @@ export class ReactNativeSuperSwiper extends React.Component {
                                 canLoadMore:_canLoadMore
                             })
                         }
-                        if (enableLoadMore && _canLoadMore) {
-                            onArrive && onArrive();
+                        if (enableLoadMore && _canLoadMore && onArrive && !this.arrived) {
+                           this.arrived = true;
+                           onArrive();
                         }
                         this.rotateArrow(!_canLoadMore);
                         this.translateX.setValue(x);
@@ -146,6 +148,7 @@ export class ReactNativeSuperSwiper extends React.Component {
                         this.props.onEndDrag && this.props.onEndDrag();
                         if (enableLoadMore && this.state.canLoadMore) {
                             onRelease && onRelease();
+                            this.arrived = false;
                         }
                     }}
                 >
@@ -279,8 +282,9 @@ export class ReactNativeSuperSwiper extends React.Component {
             this.currentIndex = newCurrentIndex;
             onChange && onChange(newCurrentIndex);
         }
-        if (enableLoadMore && this.state.canLoadMore) {
-            onArrive && onArrive();
+        if (enableLoadMore && this.state.canLoadMore && onArrive && !this.arrived) {
+            this.arrived = true;
+            onArrive();
         }
     };
 
@@ -295,6 +299,7 @@ export class ReactNativeSuperSwiper extends React.Component {
         this.props.onEndDrag && this.props.onEndDrag();
         if (enableLoadMore && this.state.canLoadMore) {
             onRelease && onRelease();
+            this.arrived = false;
         }
 
         
@@ -340,12 +345,11 @@ export class ReactNativeSuperSwiper extends React.Component {
             easing: Easing.linear
         })
                 .start(() => {
-                    // if (left) {
-                    //     // this.canLoadMore = false;
-                    //     this.setState({
-                    //         canLoadMore:false
-                    //     })
-                    // }
+                    if (left) {
+                        this.setState({
+                            canLoadMore:false
+                        })
+                    }
                 });
                 
     };

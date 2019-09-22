@@ -13,14 +13,17 @@ import {
   Image,
   Dimensions,
   ScrollView,
-  TouchableHighlight
+  TouchableHighlight,
+  FlatList
 } from 'react-native';
 
 import { ReactNativeSuperSwiper } from 'react-native-super-swiper';
 const { width, height } = Dimensions.get('window');
 
 export default class MyApp extends Component {
-
+  state = { 
+    swiperActive:true
+  }
   generateSwiperContent() {
     const list = [];
     const img1 = require("./imgs/1.jpg");
@@ -53,9 +56,15 @@ export default class MyApp extends Component {
   }
   onBeginDrag() {
     console.log("onBeginDrag:触摸开始")
+    this.setState({
+      swiperActive:false
+    })
   }
   onEndDrag() {
     console.log("onEndDrag:触摸结束")
+    this.setState({
+      swiperActive:true
+    })
   }
   onScroll(e) {
     // console.log(e)
@@ -63,10 +72,16 @@ export default class MyApp extends Component {
   onChange(index) {
     console.log("onchange:当前是第"+index+"个")
   }
+  renderFlatList(){
+    return <FlatList
+    data={[1,2,3,4,5,6,7,8,9,10]}
+    renderItem={({item}) => <Text style={{height:50}}>{item}</Text>}
+  />
+  }
 
   render() {
     return (
-      <ScrollView>
+      <ScrollView scrollEnabled={this.state.swiperActive}>
         <ReactNativeSuperSwiper
           onChange={this.onChange}
           loadMoreOptions={{
@@ -77,9 +92,15 @@ export default class MyApp extends Component {
             onArrive: () => { console.log("到达") },
             onRelease: () => { console.log("释放") },
             renderLoadMoreView: () => { }
-          }} onScroll={this.onScroll} onBeginDrag={this.onBeginDrag} onEndDrag={this.onEndDrag}>
+          }} 
+          onScroll={this.onScroll}
+          onBeginDrag={this.onBeginDrag.bind(this)} 
+          onEndDrag={this.onEndDrag.bind(this)}>
           {this.state.swiperContent}
         </ReactNativeSuperSwiper>
+        {
+          this.renderFlatList()
+        }
       </ScrollView>
     );
   }
