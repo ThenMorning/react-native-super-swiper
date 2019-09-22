@@ -3,10 +3,12 @@
 
 # 效果
 ios:
+
 <img width="300" src="https://github.com/WinwardZ/react-native-super-swiper/blob/master/img/1.gif"/>
 
 android:
-<img width="300" src="https://github.com/WinwardZ/react-native-super-swiper/blob/master/img/1.gif"/>
+
+<img width="300" src="https://github.com/WinwardZ/react-native-super-swiper/blob/master/img/2.gif"/>
 
 # install
 
