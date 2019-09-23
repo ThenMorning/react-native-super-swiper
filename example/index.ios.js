@@ -87,8 +87,8 @@ export default class MyApp extends Component {
           loadMoreOptions={{
             enableLoadMore: true,
             distance: 3,
-            initText: "左滑",
-            releaseText: "释放",
+            initText: "左滑查看更多图片",
+            releaseText: "释放查看更多图片",
             onArrive: () => { console.log("到达") },
             onRelease: () => { console.log("释放") },
             renderLoadMoreView: () => { }
