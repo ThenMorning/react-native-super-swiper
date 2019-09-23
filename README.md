@@ -1,12 +1,16 @@
 # react-native-super-swiper
 
+支持安卓和ios效果相同的react-native轮播图,实现淘宝详情页banner的效果。
+
 
 # 效果
 ios:
+
 <img width="300" src="https://github.com/WinwardZ/react-native-super-swiper/blob/master/img/1.gif"/>
 
 android:
-<img width="300" src="https://github.com/WinwardZ/react-native-super-swiper/blob/master/img/1.gif"/>
+
+<img width="300" src="https://github.com/WinwardZ/react-native-super-swiper/blob/master/img/2.gif"/>
 
 # install
 
