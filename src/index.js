@@ -230,14 +230,13 @@ export class ReactNativeSuperSwiper extends React.Component {
 
     initData = (pageWidth = 0, pageCount = 0) => {
         const {loadMoreOptions} = this.props;
-        const {enableLoadMore,distantce} = loadMoreOptions;
+        const {enableLoadMore,distance} = loadMoreOptions;
 
         if (pageWidth > 0 && pageCount > 0) {
             this.pageWidth = pageWidth;
-            console.log(pageWidth)
             // 设置more区域的最大宽度
             if (enableLoadMore) {
-                this.moreViewWidth.setValue(pageWidth / distantce);
+                this.moreViewWidth.setValue(pageWidth / distance);
             } else {
                 this.moreViewWidth.setValue(0);
             }
