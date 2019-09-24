@@ -34,6 +34,7 @@ const DETAL_DOT_OPACITY = SELECTED_DOT_OPACITY - UNSELECTED_DOT_OPACITY;
  * 轮播组件
  */
 export class ReactNativeSuperSwiper extends React.Component {
+    scrollview = null;
     static propTypes = {
         style: ViewPropTypes.style,
         isAndroid:PropTypes.bool, // 是否为安卓设备
@@ -112,6 +113,7 @@ export class ReactNativeSuperSwiper extends React.Component {
             return (
                 <ScrollView
                     {...this.props}
+                    ref={o=>this.scrollview = o}
                     showsHorizontalScrollIndicator={false}
                     overScrollMode="never"
                     horizontal
@@ -318,7 +320,11 @@ export class ReactNativeSuperSwiper extends React.Component {
     computeIndex = (x) => Math.floor(-x / this.pageWidth);
 
     toPage = (index) => {
-        const {onChange} = this.props;
+        const {onChange,isAndroid} = this.props;
+        if(isAndroid){
+            this.scrollview.scrollTo({x: index * this.pageWidth, y: 0, animated: true});
+            return;
+        }
         // 限制页面滚动的范围
         // eslint-disable-next-line no-param-reassign
         index = Math.min(Math.max(0, index), this.pageCount - 1);
